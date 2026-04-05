@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Music Pro - Playlist Mode</title>
+    <style>
+        :root { --primary: #ff4444; --bg: #0b0b0b; --card: #161616; --text: #eee; --accent: #1db954; --hover: #252525; }
+        body { background-color: var(--bg); color: var(--text); font-family: 'Segoe UI', sans-serif; display: flex; justify-content: center; padding: 20px; margin: 0; }
+        
+        /* Layout chính chia làm 2 cột */
+        .main-layout { display: flex; gap: 20px; width: 100%; max-width: 1200px; align-items: flex-start; }
+
+        /* Cột bên trái: Player */
+        .container { flex: 2; background: var(--card); padding: 30px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.8); }
+        
+        /* Cột bên phải: Playlist */
+        .playlist-panel { flex: 1; background: var(--card); border-radius: 20px; padding: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.8); max-height: 85vh; display: flex; flex-direction: column; }
+        
+        h1, h2 { color: var(--primary); text-align: center; font-size: 22px; margin-bottom: 20px; text-transform: uppercase; letter-spacing: 2px; }
+        h2 { font-size: 18px; margin-top: 0; border-bottom: 1px solid #333; padding-bottom: 10px; }
+
+        .input-box { display: flex; gap: 10px; margin-bottom: 20px; }
+        input { flex: 1; padding: 12px; border-radius: 8px; border: 1px solid #333; background: #222; color: #fff; outline: none; }
+        button#main-run { padding: 0 20px; background: var(--primary); color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; }
+
+        #player-wrapper { 
+            width: 100%; aspect-ratio: 16/9; background: #000; border-radius: 12px; 
+            overflow: hidden; margin-bottom: 20px; transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .music-mode-active { height: 0px !important; border: 2px solid var(--accent) !important; box-shadow: 0 0 15px var(--accent); }
+
+        .tools { display: grid; grid-template-columns: 1fr; gap: 15px; }
+        .panel { background: #222; padding: 15px; border-radius: 12px; }
+        .flex-row { display: flex; align-items: center; justify-content: space-between; margin-top: 10px; }
+        
+        .btn-action { background: #333; color: white; border: 1px solid #444; padding: 5px 15px; border-radius: 5px; cursor: pointer; font-size: 12px; transition: 0.3s; }
+        .btn-action:hover { background: var(--accent); border-color: var(--accent); }
+
+        /* Switch toggle */
+        .switch { position: relative; display: inline-block; width: 40px; height: 20px; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #444; transition: .4s; border-radius: 20px; }
+        .slider:before { position: absolute; content: ""; height: 14px; width: 14px; left: 3px; bottom: 3px; background-color: white; transition: .4s; border-radius: 50%; }
+        input:checked + .slider { background-color: var(--accent); }
+        input:checked + .slider:before { transform: translateX(20px); }
+
+        /* Playlist Item Style */
+        #playlist-items { overflow-y: auto; flex-grow: 1; margin-top: 10px; }
+        .playlist-item { 
+            display: flex; align-items: center; gap: 10px; padding: 10px; 
+            border-radius: 8px; cursor: pointer; margin-bottom: 8px; transition: 0.2s;
+            background: #222; font-size: 14px;
+        }
+        .playlist-item:hover { background: var(--hover); }
+        .playlist-item.active { border-left: 4px solid var(--accent); background: #2a2a2a; }
+        .playlist-item img { width: 60px; border-radius: 4px; }
+        .playlist-item .title { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        
+        #thumb-img { width: 100%; border-radius: 8px; margin-top: 10px; display: none; }
+        select { background: #333; color: white; border: none; padding: 5px; border-radius: 4px; }
+
+        /* Responsive */
+        @media (max-width: 900px) {
+            .main-layout { flex-direction: column; }
+            .playlist-panel { width: 100%; box-sizing: border-box; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="main-layout">
+    <div class="container">
+        <h1>Music Pro</h1>
+        
+        <div class="input-box">
+            <input type="text" id="v-url" placeholder="Dán link Youtube vào đây...">
+            <button id="main-run" onclick="addVideoFromInput()">THÊM</button>
+        </div>
+
+        <div id="player-wrapper"><div id="player"></div></div>
+
+        <div class="tools">
+            <div class="panel">
+                <div class="flex-row">
+                    <span>Tốc độ:</span>
+                    <select id="v-speed" onchange="setVp()">
+                        <option value="1">1.0x</option>
+                        <option value="2">2.0x</option>
+                        <option value="4">4.0x</option>
+                    </select>
+                </div>
+                <div class="flex-row">
+                    <span>Điều khiển:</span>
+                    <button id="pp-btn" class="btn-action" onclick="togglePlayPause()">PAUSE</button>
+                </div>
+                <div class="flex-row">
+                    <span>Chỉ nghe nhạc (Ẩn Video):</span>
+                    <label class="switch">
+                        <input type="checkbox" id="m-toggle" onchange="handleMusicMode()">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                <div class="flex-row">
+                    <span>Tự động lặp lại bài:</span>
+                    <label class="switch">
+                        <input type="checkbox" id="l-toggle">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+            </div>
+        </div>
+       
+    </div>
+
+    <div class="playlist-panel">
+        <h2>Danh sách phát</h2>
+        <div id="playlist-items">
+            </div>
+    </div>
+</div>
+
+<script src="https://www.youtube.com/iframe_api"></script>
+<script>
+    let player;
+    let playlist = [];
+    let currentIndex = -1;
+
+    // Danh sách mặc định ban đầu
+    const defaultVideos = [
+        "y7ahT06kE7I",
+        "dQw4w9WgXcQ"
+    ];
+
+    function onYouTubeIframeAPIReady() {
+        // Load các video mặc định vào playlist
+        defaultVideos.forEach(id => addToPlaylist(id));
+        
+        // Chạy video đầu tiên
+        if(playlist.length > 0) {
+            playAt(0);
+        }
+    }
+
+    function addVideoFromInput() {
+        const url = document.getElementById('v-url').value;
+        const id = url.match(/(?:youtu\.be\/|youtube\.com.*v=)([a-zA-Z0-9_-]{11})/)?.[1];
+        
+        if(!id) return alert("Link không hợp lệ bro!");
+        
+        addToPlaylist(id);
+        document.getElementById('v-url').value = ""; // Xóa input sau khi thêm
+        
+        // Nếu đang không chạy video nào thì chạy bài vừa thêm
+        if(currentIndex === -1) playAt(0);
+    }
+
+    function addToPlaylist(id) {
+        if(playlist.includes(id)) return; // Tránh trùng lặp
+        
+        playlist.push(id);
+        renderPlaylist();
+    }
+
+    function renderPlaylist() {
+        const container = document.getElementById('playlist-items');
+        container.innerHTML = "";
+        
+        playlist.forEach((id, index) => {
+            const item = document.createElement('div');
+            item.className = `playlist-item ${index === currentIndex ? 'active' : ''}`;
+            item.onclick = () => playAt(index);
+            
+            item.innerHTML = `
+                <img src="https://i.ytimg.com/vi/${id}/default.jpg">
+                <div class="title">Video #${index + 1} (${id})</div>
+            `;
+            container.appendChild(item);
+        });
+    }
+
+    function playAt(index) {
+        currentIndex = index;
+        const id = playlist[index];
+        
+        if(player) {
+            player.loadVideoById(id);
+        } else {
+            player = new YT.Player('player', {
+                height: '100%', width: '100%', videoId: id,
+                playerVars: { 'autoplay': 1, 'enablejsapi': 1 },
+                events: { 'onStateChange': onPlayerStateChange }
+            });
+        }
+        
+        showThumb(id);
+        renderPlaylist();
+    }
+
+    function onPlayerStateChange(event) {
+        const btn = document.getElementById('pp-btn');
+        
+        // Cập nhật nút Play/Pause
+        if (event.data === YT.PlayerState.PLAYING) {
+            btn.innerText = "PAUSE";
+        } else if (event.data === YT.PlayerState.PAUSED) {
+            btn.innerText = "PLAY";
+        }
+
+        // Xử lý khi kết thúc video
+        if (event.data === YT.PlayerState.ENDED) {
+            if (document.getElementById('l-toggle').checked) {
+                player.playVideo(); // Lặp lại bài hiện tại
+            } else {
+                nextVideo(); // Chuyển bài kế tiếp
+            }
+        }
+    }
+
+    function nextVideo() {
+        if(currentIndex < playlist.length - 1) {
+            playAt(currentIndex + 1);
+        } else {
+            playAt(0); // Quay lại bài đầu tiên nếu hết list
+        }
+    }
+
+    function togglePlayPause() {
+        if (!player) return;
+        const state = player.getPlayerState();
+        state === YT.PlayerState.PLAYING ? player.pauseVideo() : player.playVideo();
+    }
+
+    function handleMusicMode() {
+        const isMusic = document.getElementById('m-toggle').checked;
+        const wrapper = document.getElementById('player-wrapper');
+        isMusic ? wrapper.classList.add('music-mode-active') : wrapper.classList.remove('music-mode-active');
+    }
+
+    function setVp() {
+        const s = document.getElementById('v-speed').value;
+        if(player) player.setPlaybackRate(parseFloat(s));
+    }
+
+    function showThumb(id) {
+        const img = document.getElementById('thumb-img');
+        img.src = `https://i.ytimg.com/vi/${id}/maxresdefault.jpg`;
+        img.onload = function() {
+            if(this.naturalWidth <= 120) this.src = `https://i.ytimg.com/vi/${id}/hqdefault.jpg`;
+            img.style.display = 'block';
+        };
+    }
+</script>
+</body>
+</html>
